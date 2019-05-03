@@ -11,6 +11,7 @@ This is just a bit of faffing about with making a basic raycaster in HTML5 canva
   - Have falloff lighting
   - Have walls (height)
   - Use vanilla canvas
+- [ ] Add build system with typescript
 - [ ] Upgrade to WebGL or try three.js
 - [ ] Animate point with perlin noise
 - [ ] Create background for infinite distance
@@ -27,3 +28,8 @@ This is just a bit of faffing about with making a basic raycaster in HTML5 canva
 ### Alternate fun ideas with raycasters:
 - A few dots running around shooting rays that get brighter where they intersect or illuminating bubbles flying around.
 - Try voxel terrain instead
+
+
+## Random working notes
+
+We'll start with a single ray for each n radians. But we need to have vertical rays as well if we decide to have variable height walls.

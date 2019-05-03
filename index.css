@@ -16,8 +16,9 @@ body {
   align-items: center;
 }
 
-#display-2d {
-  height: 500px;
-  width: 500px;
-  background: #999;
+#display-map {
+}
+
+#display-pov {
+  display: none;
 }
