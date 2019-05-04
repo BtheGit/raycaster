@@ -5,12 +5,13 @@
 
 // The length/width of one grid section, or wall.
 const GRID_LENGTH = 10;
-const WORLD_WIDTH = 500;
-const WORLD_HEIGHT = 500;
+const WORLD_WIDTH = 3000;
+const WORLD_HEIGHT = 3000;
 const STARTING_POSX = 200;
 const STARTING_POSY = 200;
 const STARTING_DIR = 0; // Angle in degrees.
 const COLUMN_HEIGHT = 50;
+const VIEW_DISTANCE = 1000;
 
 // # Helper functions
 const radians = degrees => degrees * (Math.PI / 180);
@@ -32,6 +33,10 @@ const scaleToScreen = (vector, screen) => {
   const scaledX = vector.x * scaleX;
   const scaledY = vector.y * scaleY;
   return { x: scaledX, y: scaledY };
+}
+const getRandomWallColor = () => {
+  const WALL_COLORS = [210, 180, 240];
+  return WALL_COLORS[ Math.floor((Math.random() * WALL_COLORS.length))];
 }
 
 // Brainstorming Base classes.
@@ -58,12 +63,13 @@ class Vector {
   }
 }
 class Wall {
-  constructor(vectorA, vectorB, map, pov, hue = 200) {
+  constructor(vectorA, vectorB, map, pov, hue = getRandomWallColor()) {
     this.vectorA = vectorA;
     this.vectorB = vectorB;
     this.map = map;
     this.pov = pov;
     this.hue = hue;
+    this.color = `hsl(${ this.hue }, 100%, 70%)`;
   }
 
   updateDisplay(displayName, display){
@@ -78,7 +84,7 @@ class Wall {
   drawMap(color) {
     const scaledVectorA = scaleToScreen(this.vectorA, this.map);
     const scaledVectorB = scaleToScreen(this.vectorB, this.map);
-    this.map.ctx.strokeStyle = `hsl(${ this.hue }, 100%, 50%)`;
+    this.map.ctx.strokeStyle = this.color;
     this.map.ctx.beginPath();
     this.map.ctx.moveTo(scaledVectorA.x, scaledVectorA.y);
     this.map.ctx.lineTo(scaledVectorB.x, scaledVectorB.y);
@@ -131,12 +137,14 @@ class Raycaster {
     rays.forEach(({ pos, object }) => {
       const { x: intersectionX , y: intersectionY } = scaleToScreen(pos, this.map)
       const { x: scaledPositionX, y: scaledPositionY } = scaleToScreen(this.pos, this.map);
-      this.map.ctx.strokeStyle = 'green';
+
+      this.map.ctx.strokeStyle = 'rgba(200,100,200,0.1)';
       this.map.ctx.beginPath();
       this.map.ctx.moveTo(scaledPositionX, scaledPositionY);
       this.map.ctx.lineTo(intersectionX,intersectionY);
       this.map.ctx.closePath();
       this.map.ctx.stroke();
+
       this.map.ctx.beginPath();
       this.map.ctx.arc(intersectionX, intersectionY, 2, 0, Math.PI * 2);
       this.map.ctx.fillStyle = 'red';
@@ -146,7 +154,6 @@ class Raycaster {
   }
   
   drawRaysOnFOV(rays){
-    const VIEW_DISTANCE = 500;
     const columnWidth = this.pov.width / rays.length;
     this.pov.ctx.fillStyle = "purple";
     this.pov.ctx.fillRect(0, 0, this.pov.width, this.pov.height);
@@ -159,16 +166,17 @@ class Raycaster {
       const rayDistance = vectorDistance(this.pos, rayPosition);
       const halfFov = this.fov / 2;
       const angle = -halfFov + (this.precision * i);
-      const normalizedDistance = Math.cos(radians(angle)) * rayDistance; // z
+      const normalizedDistance = Math.cos(radians(angle)) * rayDistance;
       const columnOffset = this.pov.height * (COLUMN_HEIGHT / normalizedDistance);
       const x1 = offset;
       const y1 = (this.pov.height / 2) - (columnOffset / 2);
       const brightness = (((VIEW_DISTANCE - normalizedDistance) / VIEW_DISTANCE) * 40) + 10;
-      this.pov.ctx.beginPath();
+
       const wallHue = wall.hue;
       const hsl = `hsl(${ wallHue }, 100%, ${ brightness }%)`;
       this.pov.ctx.fillStyle = hsl;
       this.pov.ctx.strokeStyle = hsl;
+      this.pov.ctx.beginPath();
       this.pov.ctx.fillRect(x1,y1, columnWidth, columnOffset);
       this.pov.ctx.strokeRect(x1,y1, columnWidth, columnOffset);
       this.pov.ctx.closePath();
@@ -273,7 +281,7 @@ class Screen {
 }
 
 // We'll start with a lot of objects. See if we decide to avoid that in a refactor.
-const generateRandomWalls = ({ count = 5, map = null, pov = null }) => {
+const generateRandomWalls = ({ count = 25, map = null, pov = null }) => {
   const walls = [];
   for(let i = 0; i < count; i++){
     const wall = new Wall(new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), map, pov);
@@ -346,8 +354,8 @@ class Game {
     // For each animation, we need to draw to two different canvases, the map and the POV
     // For now, we'll just pass both screens to the renderable objects for simplicity. But this is bad architecture.
     this.map.draw();
-    for (let objects of this.walls) {
-      objects.draw();
+    for (let wall of this.walls) {
+      wall.draw();
     }
     this.player.draw();
     this.player.cast();
