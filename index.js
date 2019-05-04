@@ -16,6 +16,7 @@ const radians = degrees => degrees * (Math.PI / 180);
 const degrees = radians => radians / (Math.PI/ 180);
 const vectorDistance = (vector1, vector2) => Math.sqrt((vector1.x - vector2.x) ** 2 + (vector1.y - vector2.y) ** 2);
 const random = (upper = 100, lower = 0) => Math.max(Math.floor(Math.random() * (upper + 1)), lower);
+const clamp = (number, min, max) => Math.max(min, Math.min(number, max));
 
 // We'll start with a lot of objects. See if we decide to avoid that in a refactor.
 const generateRandomWalls = ({count = 5, ctx = null}) => {
@@ -82,6 +83,7 @@ class Raycaster {
     this.size = 2; // Size of the circle indicating caster position
     this.fov = 70;
     this.precision = 1; // Step value for fov.
+    this.speed = 3; // Multiplier for moving player per step.
     this.pos = pos;
     this.dir = dir;
     this.color = color; // Color of the circle indicating caster position
@@ -90,9 +92,21 @@ class Raycaster {
     this.rays = [];
   }
 
-  move(){}
+  move({ x, y } = {}){
+    if(x != null) {
+      const newPosX = clamp(this.pos.x + (x * this.speed), 1, MAP_WIDTH - 1); // The 1 offset is to prevent being in a boundary wall
+      this.pos.x = newPosX;
+    }
+    if(y != null) {
+      const newPosY = clamp(this.pos.y + (y * this.speed), 1, MAP_HEIGHT - 1);
+      this.pos.y = newPosY;
+    }
+  }
 
-  rotate(){}
+  rotate(rotation){
+    const newDir = this.dir + (rotation * this.speed);
+    this.dir = newDir;
+  }
 
   draw(ctx = this.ctx){
     ctx.beginPath();
@@ -126,7 +140,7 @@ class Raycaster {
       this.ctx.fill();
       object.draw(this.ctx, 'blue')
     })
-    const VIEW_DISTANCE = 500;
+    const VIEW_DISTANCE = 300;
     const columnWidth = MAP_WIDTH / rays.length;
     this.ctx.fillStyle = "purple";
     this.ctx.fillRect(MAP_WIDTH, 0, MAP_WIDTH, MAP_HEIGHT);
@@ -231,12 +245,35 @@ class Map {
 // To handle the I/O and game loop. Probably can refrain from making this a class, but for brainstorming it's cool.
 class Game {
   constructor(){
-    this.interval = 20;
+    this.interval = 1000 / 60;
     this.animationFrame = null;
     this.map = new Map('display-map');
     this.map.resizeCanvas(500,500)
     this.world = generateRandomWalls({ctx: this.map.ctx});
     this.player = new Raycaster({pos: new Vector(STARTING_POSX, STARTING_POSY), dir: STARTING_DIR, ctx: this.map.ctx, world: this.world });
+
+    document.addEventListener('keydown', ({ key }) => {
+      switch(key){
+        case 'a':
+          this.player.move({x: 1})
+          break;
+        case 'd':
+          this.player.move({x: -1})
+          break;
+        case 'w':
+          this.player.move({y: 1})
+          break;
+        case 's':
+          this.player.move({y: -1})
+          break;
+        case 'q':
+          this.player.rotate(-1);
+          break;
+        case 'e':
+          this.player.rotate(1);
+          break;
+      }      
+    })
   }
 
   start() {
@@ -247,12 +284,10 @@ class Game {
       const now = Date.now(timestamp);
       delta = now - then;
       if(delta > this.interval) {
-        // Do stuff
-        for (let objects of this.world) {
-          objects.draw();
-        }
-        this.player.draw();
-        this.player.cast();
+        // Get i/o
+        
+        // Animate
+        this.animate();
 
         then = now - (delta % this.interval)
       }
@@ -264,6 +299,14 @@ class Game {
   stop() {
     cancelAnimationFrame(this.animationFrame)
     this.animationFrame = null;
+  }
+
+  animate() {
+    for (let objects of this.world) {
+      objects.draw();
+    }
+    this.player.draw();
+    this.player.cast();
   }
 
 
