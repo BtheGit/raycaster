@@ -2,7 +2,7 @@
 
 This is just a bit of faffing about with making a basic raycaster in HTML5 canvas. But in the interests of making lists that never get completed, here are some potential milestones:
 
-- [ ] Make a basic raycaster in 2d:
+- [x] Make a basic raycaster in 2d:
   - Have a point, FOV, walls
   - Be able to move the point
   - Be able to rotate the point
@@ -13,9 +13,9 @@ This is just a bit of faffing about with making a basic raycaster in HTML5 canva
   - Use vanilla canvas
 - [ ] Add build system with typescript
 - [ ] Upgrade to WebGL or try three.js
-- [ ] Animate point with perlin noise
-- [ ] Create background for infinite distance
-- [ ] Walls and floors
+- [x] Animate point with perlin noise
+- [x] Create background for infinite distance
+- [x] Walls and floors
 - [ ] Animate background
 - [ ] Allow maps to be predrawn and loaded
 - [ ] Create wall types (start with colors)

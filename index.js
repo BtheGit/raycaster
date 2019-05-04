@@ -128,7 +128,6 @@ class Raycaster {
     const xNoise = noise * (Math.random() * 60);
     const yNoise = noise * (Math.random() * 60);
     const dirNoise = noise * (Math.random() * 30);
-    console.log(xNoise, yNoise)
     this.pos.x = clamp(this.pos.x + xNoise, 1, WORLD_WIDTH - 1);
     this.pos.y = clamp(this.pos.y + yNoise, 1, WORLD_HEIGHT - 1);
     const newDir = this.dir + dirNoise;
@@ -174,11 +173,20 @@ class Raycaster {
   }
   
   drawRaysOnFOV(rays){
-    const columnWidth = this.pov.width / rays.length;
-    this.pov.ctx.fillStyle = "#68d8f2";
+    // Move: Coloring background of FOV
+    const skyGradient = this.pov.ctx.createLinearGradient(0,0,0, this.pov.height / 2);
+    skyGradient.addColorStop(0, "#68d8f2")
+    skyGradient.addColorStop(1, "#0844a5")
+    this.pov.ctx.fillStyle = skyGradient;
     this.pov.ctx.fillRect(0, 0, this.pov.width, this.pov.height);
-    this.pov.ctx.fillStyle = "#1a5b09";
+    const floorGradient = this.pov.ctx.createLinearGradient(0,this.pov.height / 2 ,0, this.pov.height);
+    floorGradient.addColorStop(0, "#333")
+    floorGradient.addColorStop(0.2, "#14300e")
+    floorGradient.addColorStop(1, "#1c660a")
+    this.pov.ctx.fillStyle = floorGradient;
     this.pov.ctx.fillRect(0, (this.pov.height / 2), this.pov.width, (this.pov.height / 2));
+
+    const columnWidth = this.pov.width / rays.length;
     for(let i = 0; i < rays.length; i++){
       const offset = i * columnWidth;
       const rayPosition = rays[i].pos;
@@ -357,7 +365,7 @@ class Game {
         
         // Animate
         this.animate();
-        this.player.wander();
+        // this.player.wander();
 
         then = now - (delta % this.interval)
       }
