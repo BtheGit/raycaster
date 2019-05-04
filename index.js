@@ -18,6 +18,18 @@ const vectorDistance = (vector1, vector2) => Math.sqrt((vector1.x - vector2.x) *
 const random = (upper = 100, lower = 0) => Math.max(Math.floor(Math.random() * (upper + 1)), lower);
 
 // We'll start with a lot of objects. See if we decide to avoid that in a refactor.
+const generateRandomWalls = ({count = 5, ctx = null}) => {
+  const walls = [];
+  for(let i = 0; i < count; i++){
+    const wall = new Wall(new Vector(random(MAP_WIDTH), random(MAP_HEIGHT)), new Vector(random(MAP_WIDTH), random(MAP_HEIGHT)), ctx);
+    walls.push(wall);
+  }
+  walls.push(new Wall(new Vector(0, 0), new Vector(MAP_WIDTH, 0), ctx));
+  walls.push(new Wall(new Vector(0, 0), new Vector(0, MAP_HEIGHT), ctx));
+  walls.push(new Wall(new Vector(MAP_WIDTH, MAP_HEIGHT), new Vector(MAP_WIDTH, 0), ctx));
+  walls.push(new Wall(new Vector(0, MAP_HEIGHT), new Vector(MAP_WIDTH, MAP_HEIGHT), ctx));
+  return walls;
+}
 
 // Brainstorming Base classes.
 
@@ -68,8 +80,8 @@ class Wall {
 class Raycaster {
   constructor({pos = new Vector(), dir = 0, ctx = null, color = "rgba(200,100,200,1)", world = []}){
     this.size = 2; // Size of the circle indicating caster position
-    this.fov = 60;
-    this.precision = .1; // Step value for fov.
+    this.fov = 70;
+    this.precision = 1; // Step value for fov.
     this.pos = pos;
     this.dir = dir;
     this.color = color; // Color of the circle indicating caster position
@@ -87,12 +99,6 @@ class Raycaster {
     ctx.arc(this.pos.x, this.pos.y, this.size, 0, Math.PI * 2);
     ctx.fillStyle = this.color;
     ctx.fill();
-    // for(let i = 0; i < this.fov; i += this.precision) {
-    //   ctx.strokeStyle = 'white';
-    //   ctx.beginPath();
-    //   ctx.moveTo(this.pos.x, this.pos.y);
-    //   ctx.lineTo()
-    // }
   }
 
   cast(){
@@ -127,13 +133,11 @@ class Raycaster {
     this.ctx.fillStyle = "violet";
     this.ctx.fillRect(MAP_WIDTH, (MAP_HEIGHT / 2), MAP_WIDTH, (MAP_HEIGHT / 2));
     for(let i = 0; i < rays.length; i++){
-      // const column = i + 1;
       const offset = i * columnWidth;
       const rayPosition = rays[i].pos;
       const rayDistance = vectorDistance(this.pos, rayPosition);
       const angle = this.dir + (this.precision * i);
-      // const normalizedDistance = Math.cos(angle) * rayDistance;
-      const normalizedDistance = rayDistance;
+      const normalizedDistance = Math.cos(radians(angle)) * rayDistance;
       const columnOffset = Math.max((VIEW_DISTANCE - normalizedDistance), 0);
       const x1 = MAP_WIDTH + offset;
       const y1 = (MAP_HEIGHT / 2) - (columnOffset / 2);
@@ -156,7 +160,7 @@ class Raycaster {
     // This might be better handled by the world class.
     let currentDistance = Infinity
     let intersection = null;
-    for (let object of world) {
+    for (let object of this.world) {
       // Calculate intersection of ray and object
       // If an intersection with another object was already detected,
       // only store it if it's closer.
@@ -225,38 +229,44 @@ class Map {
 }
 
 // To handle the I/O and game loop. Probably can refrain from making this a class, but for brainstorming it's cool.
-// class Game {
-//   constructor(){
-//   }
-// }
-// const game = new Game();
-
-// const world = new World(MAP_WIDTH, MAP_HEIGHT);
-// const camera = new Camera();
-
-const map = new Map('display-map');
-map.resizeCanvas(500,500)
-
-const generateRandomWalls = ({count = 5, ctx = null}) => {
-  const walls = [];
-  for(let i = 0; i < count; i++){
-    const wall = new Wall(new Vector(random(MAP_WIDTH), random(MAP_HEIGHT)), new Vector(random(MAP_WIDTH), random(MAP_HEIGHT)), ctx);
-    walls.push(wall);
+class Game {
+  constructor(){
+    this.interval = 20;
+    this.animationFrame = null;
+    this.map = new Map('display-map');
+    this.map.resizeCanvas(500,500)
+    this.world = generateRandomWalls({ctx: this.map.ctx});
+    this.player = new Raycaster({pos: new Vector(STARTING_POSX, STARTING_POSY), dir: STARTING_DIR, ctx: this.map.ctx, world: this.world });
   }
-  walls.push(new Wall(new Vector(0, 0), new Vector(MAP_WIDTH, 0), ctx));
-  walls.push(new Wall(new Vector(0, 0), new Vector(0, MAP_HEIGHT), ctx));
-  walls.push(new Wall(new Vector(MAP_WIDTH, MAP_HEIGHT), new Vector(MAP_WIDTH, 0), ctx));
-  walls.push(new Wall(new Vector(0, MAP_HEIGHT), new Vector(MAP_WIDTH, MAP_HEIGHT), ctx));
-  return walls;
+
+  start() {
+    let then = Date.now()
+    let delta;
+
+    const draw = timestamp => {
+      const now = Date.now(timestamp);
+      delta = now - then;
+      if(delta > this.interval) {
+        // Do stuff
+        for (let objects of this.world) {
+          objects.draw();
+        }
+        this.player.draw();
+        this.player.cast();
+
+        then = now - (delta % this.interval)
+      }
+      this.animationFrame = requestAnimationFrame(draw);
+    }
+    this.animationFrame = requestAnimationFrame(draw)
+  }
+
+  stop() {
+    cancelAnimationFrame(this.animationFrame)
+    this.animationFrame = null;
+  }
+
+
 }
-
-const world = generateRandomWalls({ctx: map.ctx});
-for (let objects of world) {
-  objects.draw();
-}
-
-const player = new Raycaster({pos: new Vector(STARTING_POSX, STARTING_POSY), dir: STARTING_DIR, ctx: map.ctx, world });
-
-player.draw();
-player.cast();
-// A ray should have an origin, an angle (direction), and a range.
+const game = new Game();
+game.start();
