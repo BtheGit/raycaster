@@ -5,13 +5,14 @@
 
 // The length/width of one grid section, or wall.
 const GRID_LENGTH = 10;
-const WORLD_WIDTH = 3000;
-const WORLD_HEIGHT = 3000;
+const WORLD_WIDTH = 1500;
+const WORLD_HEIGHT = 1500;
 const STARTING_POSX = 200;
 const STARTING_POSY = 200;
 const STARTING_DIR = 0; // Angle in degrees.
 const COLUMN_HEIGHT = 50;
 const VIEW_DISTANCE = 1000;
+const FRAMERATE = 1000 / 24;
 
 // # Helper functions
 const radians = degrees => degrees * (Math.PI / 180);
@@ -35,7 +36,7 @@ const scaleToScreen = (vector, screen) => {
   return { x: scaledX, y: scaledY };
 }
 const getRandomWallColor = () => {
-  const WALL_COLORS = [210, 180, 240];
+  const WALL_COLORS = [200, 220, 240, 260];
   return WALL_COLORS[ Math.floor((Math.random() * WALL_COLORS.length))];
 }
 
@@ -107,6 +108,7 @@ class Raycaster {
     this.pov = pov;
     this.world = world; // Reference to array of all objects in world.
     this.rays = [];
+    this.xoff = .1;
   }
 
   move({ x, y } = {}){
@@ -118,6 +120,24 @@ class Raycaster {
       const newPosY = clamp(this.pos.y + (y * this.speed), 1, WORLD_HEIGHT - 1);
       this.pos.y = newPosY;
     }
+  }
+
+  wander(){
+    this.xoff += .1;
+    const noise = window.noise.perlin2(this.xoff, this.xoff);
+    const xNoise = noise * (Math.random() * 60);
+    const yNoise = noise * (Math.random() * 60);
+    const dirNoise = noise * (Math.random() * 30);
+    console.log(xNoise, yNoise)
+    this.pos.x = clamp(this.pos.x + xNoise, 1, WORLD_WIDTH - 1);
+    this.pos.y = clamp(this.pos.y + yNoise, 1, WORLD_HEIGHT - 1);
+    const newDir = this.dir + dirNoise;
+    const clampedDir = newDir > 360 
+      ? newDir % 360 
+      : newDir < 0
+        ? 360 - newDir
+        : newDir;
+    this.dir = clampedDir;
   }
 
   rotate(rotation){
@@ -155,9 +175,9 @@ class Raycaster {
   
   drawRaysOnFOV(rays){
     const columnWidth = this.pov.width / rays.length;
-    this.pov.ctx.fillStyle = "purple";
+    this.pov.ctx.fillStyle = "#68d8f2";
     this.pov.ctx.fillRect(0, 0, this.pov.width, this.pov.height);
-    this.pov.ctx.fillStyle = "violet";
+    this.pov.ctx.fillStyle = "#1a5b09";
     this.pov.ctx.fillRect(0, (this.pov.height / 2), this.pov.width, (this.pov.height / 2));
     for(let i = 0; i < rays.length; i++){
       const offset = i * columnWidth;
@@ -281,23 +301,23 @@ class Screen {
 }
 
 // We'll start with a lot of objects. See if we decide to avoid that in a refactor.
-const generateRandomWalls = ({ count = 25, map = null, pov = null }) => {
+const generateRandomWalls = ({ count = 10, map = null, pov = null }) => {
   const walls = [];
   for(let i = 0; i < count; i++){
     const wall = new Wall(new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), map, pov);
     walls.push(wall);
   }
-  walls.push(new Wall(new Vector(0, 0), new Vector(WORLD_WIDTH, 0), map, pov, 25));
-  walls.push(new Wall(new Vector(0, 0), new Vector(0, WORLD_HEIGHT), map, pov, 25));
-  walls.push(new Wall(new Vector(WORLD_WIDTH, WORLD_HEIGHT), new Vector(WORLD_WIDTH, 0), map, pov, 25));
-  walls.push(new Wall(new Vector(0, WORLD_HEIGHT), new Vector(WORLD_WIDTH, WORLD_HEIGHT), map, pov, 25));
+  walls.push(new Wall(new Vector(0, 0), new Vector(WORLD_WIDTH, 0), map, pov, 300));
+  walls.push(new Wall(new Vector(0, 0), new Vector(0, WORLD_HEIGHT), map, pov, 300));
+  walls.push(new Wall(new Vector(WORLD_WIDTH, WORLD_HEIGHT), new Vector(WORLD_WIDTH, 0), map, pov, 300));
+  walls.push(new Wall(new Vector(0, WORLD_HEIGHT), new Vector(WORLD_WIDTH, WORLD_HEIGHT), map, pov, 300));
   return walls;
 }
 
 // To handle the I/O and game loop. Probably can refrain from making this a class, but for brainstorming it's cool.
 class Game {
   constructor(){
-    this.interval = 1000 / 60;
+    this.interval = FRAMERATE;
     this.animationFrame = null;
     this.map = new Screen('display-map');
     this.map.resizeCanvas(300,300);
@@ -337,6 +357,7 @@ class Game {
         
         // Animate
         this.animate();
+        this.player.wander();
 
         then = now - (delta % this.interval)
       }
