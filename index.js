@@ -118,7 +118,7 @@ class Raycaster {
     this.dir = newDir;
   }
 
-  draw(){
+  drawPlayerOnMap(){
     const { x: scaledX, y: scaledY } = scaleToScreen(this.pos, this.map);
     this.map.ctx.beginPath();
     this.map.ctx.arc(scaledX, scaledY, this.size, 0, Math.PI * 2);
@@ -126,22 +126,7 @@ class Raycaster {
     this.map.ctx.fill();
   }
 
-  cast(){
-    const rays = [];
-    // We want the direction and the center of the FOV to be equal.
-    const halfFov = this.fov / 2;
-    for(let i = -halfFov; i < halfFov; i += this.precision) {
-      const offset = i;
-      const dir = radians(this.dir + offset);
-      const intersection = this.castRay(dir);
-      if(intersection){
-        rays.push(intersection);
-      }
-    }
-    this.rays = rays;
-
-    // Break the rest into rendering functions.
-    // MAP
+  drawRaysOnMap(rays){
     rays.forEach(({ pos, object }) => {
       const { x: intersectionX , y: intersectionY } = scaleToScreen(pos, this.map)
       const { x: scaledPositionX, y: scaledPositionY } = scaleToScreen(this.pos, this.map);
@@ -157,8 +142,9 @@ class Raycaster {
       this.map.ctx.fill();
       object.draw(this.map.ctx, 'blue')
     })
-
-    // FOV
+  }
+  
+  drawRaysOnFOV(rays){
     const VIEW_DISTANCE = 500;
     const columnWidth = this.pov.width / rays.length;
     this.pov.ctx.fillStyle = "purple";
@@ -175,20 +161,38 @@ class Raycaster {
       const columnOffset = Math.max((VIEW_DISTANCE - normalizedDistance), 0);
       const x1 = offset;
       const y1 = (WORLD_HEIGHT / 2) - (columnOffset / 2);
-      const brightness = Math.ceil(((VIEW_DISTANCE - normalizedDistance) / VIEW_DISTANCE) * 255);
+      const brightness = (((VIEW_DISTANCE - normalizedDistance) / VIEW_DISTANCE) * 40) + 10;
       this.pov.ctx.beginPath();
       const wallHue = wall.hue;
-      const hsl = `hsl(${ wallHue}, 100%, ${ brightness})`;
+      const hsl = `hsl(${ wallHue }, 100%, ${ brightness }%)`;
       this.pov.ctx.fillStyle = hsl;
       this.pov.ctx.strokeStyle = hsl;
       this.pov.ctx.fillRect(x1,y1, columnWidth, columnOffset);
       this.pov.ctx.strokeRect(x1,y1, columnWidth, columnOffset);
       this.pov.ctx.closePath();
     }
-    rays.forEach(({ pos, object }) => {
+  }
 
+  draw(rays = this.rays){
+    this.drawPlayerOnMap();
+    this.drawRaysOnMap(rays);
+    this.drawRaysOnFOV(rays);
+  }
 
-    })
+  cast(){
+    const rays = [];
+    // We want the direction and the center of the FOV to be equal.
+    const halfFov = this.fov / 2;
+    for(let i = -halfFov; i < halfFov; i += this.precision) {
+      const offset = i;
+      const dir = radians(this.dir + offset);
+      const intersection = this.castRay(dir);
+      if(intersection){
+        rays.push(intersection);
+      }
+    }
+    this.rays = rays;
+    this.draw();
     return this;
   }
 
@@ -273,10 +277,10 @@ const generateRandomWalls = ({ count = 5, map = null, pov = null }) => {
     const wall = new Wall(new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), map, pov);
     walls.push(wall);
   }
-  walls.push(new Wall(new Vector(0, 0), new Vector(WORLD_WIDTH, 0), map, pov));
-  walls.push(new Wall(new Vector(0, 0), new Vector(0, WORLD_HEIGHT), map, pov));
-  walls.push(new Wall(new Vector(WORLD_WIDTH, WORLD_HEIGHT), new Vector(WORLD_WIDTH, 0), map, pov));
-  walls.push(new Wall(new Vector(0, WORLD_HEIGHT), new Vector(WORLD_WIDTH, WORLD_HEIGHT), map, pov));
+  walls.push(new Wall(new Vector(0, 0), new Vector(WORLD_WIDTH, 0), map, pov, 25));
+  walls.push(new Wall(new Vector(0, 0), new Vector(0, WORLD_HEIGHT), map, pov, 25));
+  walls.push(new Wall(new Vector(WORLD_WIDTH, WORLD_HEIGHT), new Vector(WORLD_WIDTH, 0), map, pov, 25));
+  walls.push(new Wall(new Vector(0, WORLD_HEIGHT), new Vector(WORLD_WIDTH, WORLD_HEIGHT), map, pov, 25));
   return walls;
 }
 
@@ -339,6 +343,7 @@ class Game {
   animate() {
     // For each animation, we need to draw to two different canvases, the map and the POV
     // For now, we'll just pass both screens to the renderable objects for simplicity. But this is bad architecture.
+    this.map.draw();
     for (let objects of this.walls) {
       objects.draw();
     }
