@@ -5,8 +5,8 @@
 
 // The length/width of one grid section, or wall.
 const GRID_LENGTH = 10;
-const MAP_WIDTH = 500;
-const MAP_HEIGHT = 500;
+const WORLD_WIDTH = 500;
+const WORLD_HEIGHT = 500;
 const STARTING_POSX = 200;
 const STARTING_POSY = 200;
 const STARTING_DIR = 0; // Angle in degrees.
@@ -25,19 +25,12 @@ const getMovementDelta = ({angle, forward = true, speed = 1 }) => {
   const y = forward ? yDelta : -yDelta;
   return { x, y };
 }
-
-// We'll start with a lot of objects. See if we decide to avoid that in a refactor.
-const generateRandomWalls = ({count = 5, ctx = null}) => {
-  const walls = [];
-  for(let i = 0; i < count; i++){
-    const wall = new Wall(new Vector(random(MAP_WIDTH), random(MAP_HEIGHT)), new Vector(random(MAP_WIDTH), random(MAP_HEIGHT)), ctx);
-    walls.push(wall);
-  }
-  walls.push(new Wall(new Vector(0, 0), new Vector(MAP_WIDTH, 0), ctx));
-  walls.push(new Wall(new Vector(0, 0), new Vector(0, MAP_HEIGHT), ctx));
-  walls.push(new Wall(new Vector(MAP_WIDTH, MAP_HEIGHT), new Vector(MAP_WIDTH, 0), ctx));
-  walls.push(new Wall(new Vector(0, MAP_HEIGHT), new Vector(MAP_WIDTH, MAP_HEIGHT), ctx));
-  return walls;
+const scaleToScreen = (vector, screen) => {
+  const scaleX = screen.width / WORLD_WIDTH;
+  const scaleY = screen.height / WORLD_HEIGHT;
+  const scaledX = vector.x * scaleX;
+  const scaledY = vector.y * scaleY;
+  return { x: scaledX, y: scaledY };
 }
 
 // Brainstorming Base classes.
@@ -64,49 +57,58 @@ class Vector {
   }
 }
 class Wall {
-  constructor(vectorA, vectorB, ctx, color = 'white') {
+  constructor(vectorA, vectorB, map, pov, hue = 200) {
     this.vectorA = vectorA;
     this.vectorB = vectorB;
-    this.ctx = ctx;
-    this.color = color;
+    this.map = map;
+    this.pov = pov;
+    this.hue = hue;
   }
 
-  setCtx(ctx){
-    this.ctx = ctx;
+  updateDisplay(displayName, display){
+    this[displayName] = display;
   }
 
-  draw(ctx = this.ctx, color = this.color) {
-    ctx.strokeStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(this.vectorA.x, this.vectorA.y);
-    ctx.lineTo(this.vectorB.x, this.vectorB.y);
-    ctx.closePath();
-    ctx.stroke();
+  draw(color = this.color) {
+    this.drawMap(color);
+  }
+
+  // Temporarily do rendering internally
+  drawMap(color) {
+    const scaledVectorA = scaleToScreen(this.vectorA, this.map);
+    const scaledVectorB = scaleToScreen(this.vectorB, this.map);
+    this.map.ctx.strokeStyle = `hsl(${ this.hue }, 100%, 50%)`;
+    this.map.ctx.beginPath();
+    this.map.ctx.moveTo(scaledVectorA.x, scaledVectorA.y);
+    this.map.ctx.lineTo(scaledVectorB.x, scaledVectorB.y);
+    this.map.ctx.closePath();
+    this.map.ctx.stroke();
   }
 }
 
 // An origin of rays
 class Raycaster {
-  constructor({pos = new Vector(), dir = 0, ctx = null, color = "rgba(200,100,200,1)", world = []}){
+  constructor({pos = new Vector(), dir = 0, map = null, pov = null, color = "rgba(200,100,200,1)", world = []}){
     this.size = 2; // Size of the circle indicating caster position
-    this.fov = 70;
-    this.precision = .1; // Step value for fov.
+    this.fov = 80;
+    this.precision = .3; // Step value for fov.
     this.speed = 3; // Multiplier for moving player per step.
     this.pos = pos;
     this.dir = dir;
     this.color = color; // Color of the circle indicating caster position
-    this.ctx = ctx;
+    this.map = map;
+    this.pov = pov;
     this.world = world; // Reference to array of all objects in world.
     this.rays = [];
   }
 
   move({ x, y } = {}){
     if(x != null) {
-      const newPosX = clamp(this.pos.x + (x * this.speed), 1, MAP_WIDTH - 1); // The 1 offset is to prevent being in a boundary wall
+      const newPosX = clamp(this.pos.x + (x * this.speed), 1, WORLD_WIDTH - 1); // The 1 offset is to prevent being in a boundary wall
       this.pos.x = newPosX;
     }
     if(y != null) {
-      const newPosY = clamp(this.pos.y + (y * this.speed), 1, MAP_HEIGHT - 1);
+      const newPosY = clamp(this.pos.y + (y * this.speed), 1, WORLD_HEIGHT - 1);
       this.pos.y = newPosY;
     }
   }
@@ -116,16 +118,19 @@ class Raycaster {
     this.dir = newDir;
   }
 
-  draw(ctx = this.ctx){
-    ctx.beginPath();
-    ctx.arc(this.pos.x, this.pos.y, this.size, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
-    ctx.fill();
+  draw(){
+    const { x: scaledX, y: scaledY } = scaleToScreen(this.pos, this.map);
+    this.map.ctx.beginPath();
+    this.map.ctx.arc(scaledX, scaledY, this.size, 0, Math.PI * 2);
+    this.map.ctx.fillStyle = this.color;
+    this.map.ctx.fill();
   }
 
   cast(){
     const rays = [];
-    for(let i = 0; i < this.fov; i += this.precision) {
+    // We want the direction and the center of the FOV to be equal.
+    const halfFov = this.fov / 2;
+    for(let i = -halfFov; i < halfFov; i += this.precision) {
       const offset = i;
       const dir = radians(this.dir + offset);
       const intersection = this.castRay(dir);
@@ -134,42 +139,51 @@ class Raycaster {
       }
     }
     this.rays = rays;
-    // rays.forEach(({ pos, object }) => {
-    //   const { x, y } = pos;
-    //   this.ctx.strokeStyle = 'green';
-    //   this.ctx.beginPath();
-    //   this.ctx.moveTo(this.pos.x, this.pos.y);
-    //   this.ctx.lineTo(x,y);
-    //   this.ctx.closePath();
-    //   this.ctx.stroke();
-    //   this.ctx.beginPath();
-    //   this.ctx.arc(x, y, 2, 0, Math.PI * 2);
-    //   this.ctx.fillStyle = 'red';
-    //   this.ctx.fill();
-    //   object.draw(this.ctx, 'blue')
-    // })
-    const VIEW_DISTANCE = 300;
-    const columnWidth = MAP_WIDTH / rays.length;
-    this.ctx.fillStyle = "purple";
-    this.ctx.fillRect(MAP_WIDTH, 0, MAP_WIDTH, MAP_HEIGHT);
-    this.ctx.fillStyle = "violet";
-    this.ctx.fillRect(MAP_WIDTH, (MAP_HEIGHT / 2), MAP_WIDTH, (MAP_HEIGHT / 2));
+
+    // Break the rest into rendering functions.
+    // MAP
+    rays.forEach(({ pos, object }) => {
+      const { x: intersectionX , y: intersectionY } = scaleToScreen(pos, this.map)
+      const { x: scaledPositionX, y: scaledPositionY } = scaleToScreen(this.pos, this.map);
+      this.map.ctx.strokeStyle = 'green';
+      this.map.ctx.beginPath();
+      this.map.ctx.moveTo(scaledPositionX, scaledPositionY);
+      this.map.ctx.lineTo(intersectionX,intersectionY);
+      this.map.ctx.closePath();
+      this.map.ctx.stroke();
+      this.map.ctx.beginPath();
+      this.map.ctx.arc(intersectionX, intersectionY, 2, 0, Math.PI * 2);
+      this.map.ctx.fillStyle = 'red';
+      this.map.ctx.fill();
+      object.draw(this.map.ctx, 'blue')
+    })
+
+    // FOV
+    const VIEW_DISTANCE = 500;
+    const columnWidth = this.pov.width / rays.length;
+    this.pov.ctx.fillStyle = "purple";
+    this.pov.ctx.fillRect(0, 0, this.pov.width, this.pov.height);
+    this.pov.ctx.fillStyle = "violet";
+    this.pov.ctx.fillRect(0, (this.pov.height / 2), this.pov.width, (this.pov.height / 2));
     for(let i = 0; i < rays.length; i++){
       const offset = i * columnWidth;
       const rayPosition = rays[i].pos;
+      const wall = rays[i].object;
       const rayDistance = vectorDistance(this.pos, rayPosition);
       const angle = this.dir + (this.precision * i);
       const normalizedDistance = Math.cos(radians(angle)) * rayDistance;
-      const columnOffset = Math.max((500 - normalizedDistance), 0);
-      const x1 = MAP_WIDTH + offset;
-      const y1 = (MAP_HEIGHT / 2) - (columnOffset / 2);
+      const columnOffset = Math.max((VIEW_DISTANCE - normalizedDistance), 0);
+      const x1 = offset;
+      const y1 = (WORLD_HEIGHT / 2) - (columnOffset / 2);
       const brightness = Math.ceil(((VIEW_DISTANCE - normalizedDistance) / VIEW_DISTANCE) * 255);
-      this.ctx.beginPath();
-      this.ctx.fillStyle = `rgb(${ brightness }, ${ brightness }, ${ brightness })`;
-      this.ctx.strokeStyle = `rgb(${ brightness }, ${ brightness }, ${ brightness })`;
-      this.ctx.fillRect(x1,y1, columnWidth, columnOffset);
-      this.ctx.strokeRect(x1,y1, columnWidth, columnOffset);
-      this.ctx.closePath();
+      this.pov.ctx.beginPath();
+      const wallHue = wall.hue;
+      const hsl = `hsl(${ wallHue}, 100%, ${ brightness})`;
+      this.pov.ctx.fillStyle = hsl;
+      this.pov.ctx.strokeStyle = hsl;
+      this.pov.ctx.fillRect(x1,y1, columnWidth, columnOffset);
+      this.pov.ctx.strokeRect(x1,y1, columnWidth, columnOffset);
+      this.pov.ctx.closePath();
     }
     rays.forEach(({ pos, object }) => {
 
@@ -222,17 +236,19 @@ class Raycaster {
   }
 }
 
-class Map {
+class Screen {
   constructor(id){
     this.canvas = document.getElementById(id);
     this.ctx = this.canvas.getContext('2d');
     this.backgroundColor = 'black';
+    this.width = 0;
+    this.height = 0;
     this.clear();
   }
 
   resizeCanvas(width, height) {
-    this.canvas.width = width * 2;
-    this.canvas.height = height;
+    this.canvas.width = this.width = width;
+    this.canvas.height = this.height = height;
     this.clear();
   }
 
@@ -250,20 +266,36 @@ class Map {
   }
 }
 
+// We'll start with a lot of objects. See if we decide to avoid that in a refactor.
+const generateRandomWalls = ({ count = 5, map = null, pov = null }) => {
+  const walls = [];
+  for(let i = 0; i < count; i++){
+    const wall = new Wall(new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), map, pov);
+    walls.push(wall);
+  }
+  walls.push(new Wall(new Vector(0, 0), new Vector(WORLD_WIDTH, 0), map, pov));
+  walls.push(new Wall(new Vector(0, 0), new Vector(0, WORLD_HEIGHT), map, pov));
+  walls.push(new Wall(new Vector(WORLD_WIDTH, WORLD_HEIGHT), new Vector(WORLD_WIDTH, 0), map, pov));
+  walls.push(new Wall(new Vector(0, WORLD_HEIGHT), new Vector(WORLD_WIDTH, WORLD_HEIGHT), map, pov));
+  return walls;
+}
+
 // To handle the I/O and game loop. Probably can refrain from making this a class, but for brainstorming it's cool.
 class Game {
   constructor(){
     this.interval = 1000 / 60;
     this.animationFrame = null;
-    this.map = new Map('display-map');
-    this.map.resizeCanvas(500,500)
-    this.world = generateRandomWalls({ctx: this.map.ctx});
-    this.player = new Raycaster({pos: new Vector(STARTING_POSX, STARTING_POSY), dir: STARTING_DIR, ctx: this.map.ctx, world: this.world });
+    this.map = new Screen('display-map');
+    this.map.resizeCanvas(300,300);
+    // TODO: I need to project things now as a ratio of the map and fov dimensions and their true size to get the pixel value
+    this.pov = new Screen('display-pov');
+    this.pov.resizeCanvas(1200,500);
+    this.walls = generateRandomWalls({ map: this.map, pov: this.pov });
+    this.player = new Raycaster({pos: new Vector(STARTING_POSX, STARTING_POSY), dir: STARTING_DIR, map: this.map, pov: this.pov, world: this.walls });
 
     document.addEventListener('keydown', ({ key }) => {
       switch(key){
         case 'a':
-          // this.player.move({x: 1})
           this.player.rotate(-1);
           break;
         case 'd':
@@ -305,7 +337,9 @@ class Game {
   }
 
   animate() {
-    for (let objects of this.world) {
+    // For each animation, we need to draw to two different canvases, the map and the POV
+    // For now, we'll just pass both screens to the renderable objects for simplicity. But this is bad architecture.
+    for (let objects of this.walls) {
       objects.draw();
     }
     this.player.draw();
