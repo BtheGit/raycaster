@@ -17,6 +17,14 @@ const degrees = radians => radians / (Math.PI/ 180);
 const vectorDistance = (vector1, vector2) => Math.sqrt((vector1.x - vector2.x) ** 2 + (vector1.y - vector2.y) ** 2);
 const random = (upper = 100, lower = 0) => Math.max(Math.floor(Math.random() * (upper + 1)), lower);
 const clamp = (number, min, max) => Math.max(min, Math.min(number, max));
+const getMovementDelta = ({angle, forward = true, speed = 1 }) => {
+  const rads = radians(angle);
+  const xDelta = Math.cos(rads) * speed;
+  const yDelta = Math.sin(rads) * speed;
+  const x = forward ? xDelta : -xDelta;
+  const y = forward ? yDelta : -yDelta;
+  return { x, y };
+}
 
 // We'll start with a lot of objects. See if we decide to avoid that in a refactor.
 const generateRandomWalls = ({count = 5, ctx = null}) => {
@@ -82,7 +90,7 @@ class Raycaster {
   constructor({pos = new Vector(), dir = 0, ctx = null, color = "rgba(200,100,200,1)", world = []}){
     this.size = 2; // Size of the circle indicating caster position
     this.fov = 70;
-    this.precision = 1; // Step value for fov.
+    this.precision = .1; // Step value for fov.
     this.speed = 3; // Multiplier for moving player per step.
     this.pos = pos;
     this.dir = dir;
@@ -126,20 +134,20 @@ class Raycaster {
       }
     }
     this.rays = rays;
-    rays.forEach(({ pos, object }) => {
-      const { x, y } = pos;
-      this.ctx.strokeStyle = 'green';
-      this.ctx.beginPath();
-      this.ctx.moveTo(this.pos.x, this.pos.y);
-      this.ctx.lineTo(x,y);
-      this.ctx.closePath();
-      this.ctx.stroke();
-      this.ctx.beginPath();
-      this.ctx.arc(x, y, 2, 0, Math.PI * 2);
-      this.ctx.fillStyle = 'red';
-      this.ctx.fill();
-      object.draw(this.ctx, 'blue')
-    })
+    // rays.forEach(({ pos, object }) => {
+    //   const { x, y } = pos;
+    //   this.ctx.strokeStyle = 'green';
+    //   this.ctx.beginPath();
+    //   this.ctx.moveTo(this.pos.x, this.pos.y);
+    //   this.ctx.lineTo(x,y);
+    //   this.ctx.closePath();
+    //   this.ctx.stroke();
+    //   this.ctx.beginPath();
+    //   this.ctx.arc(x, y, 2, 0, Math.PI * 2);
+    //   this.ctx.fillStyle = 'red';
+    //   this.ctx.fill();
+    //   object.draw(this.ctx, 'blue')
+    // })
     const VIEW_DISTANCE = 300;
     const columnWidth = MAP_WIDTH / rays.length;
     this.ctx.fillStyle = "purple";
@@ -152,7 +160,7 @@ class Raycaster {
       const rayDistance = vectorDistance(this.pos, rayPosition);
       const angle = this.dir + (this.precision * i);
       const normalizedDistance = Math.cos(radians(angle)) * rayDistance;
-      const columnOffset = Math.max((VIEW_DISTANCE - normalizedDistance), 0);
+      const columnOffset = Math.max((500 - normalizedDistance), 0);
       const x1 = MAP_WIDTH + offset;
       const y1 = (MAP_HEIGHT / 2) - (columnOffset / 2);
       const brightness = Math.ceil(((VIEW_DISTANCE - normalizedDistance) / VIEW_DISTANCE) * 255);
@@ -255,22 +263,17 @@ class Game {
     document.addEventListener('keydown', ({ key }) => {
       switch(key){
         case 'a':
-          this.player.move({x: 1})
-          break;
-        case 'd':
-          this.player.move({x: -1})
-          break;
-        case 'w':
-          this.player.move({y: 1})
-          break;
-        case 's':
-          this.player.move({y: -1})
-          break;
-        case 'q':
+          // this.player.move({x: 1})
           this.player.rotate(-1);
           break;
-        case 'e':
+        case 'd':
           this.player.rotate(1);
+          break;
+        case 'w':
+          this.player.move(getMovementDelta({ angle: this.player.dir }))
+          break;
+        case 's':
+          this.player.move(getMovementDelta({ angle: this.player.dir, forward: false }))
           break;
       }      
     })
