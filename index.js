@@ -10,6 +10,7 @@ const WORLD_HEIGHT = 500;
 const STARTING_POSX = 200;
 const STARTING_POSY = 200;
 const STARTING_DIR = 0; // Angle in degrees.
+const COLUMN_HEIGHT = 50;
 
 // # Helper functions
 const radians = degrees => degrees * (Math.PI / 180);
@@ -90,7 +91,7 @@ class Wall {
 class Raycaster {
   constructor({pos = new Vector(), dir = 0, map = null, pov = null, color = "rgba(200,100,200,1)", world = []}){
     this.size = 2; // Size of the circle indicating caster position
-    this.fov = 80;
+    this.fov = 60;
     this.precision = .3; // Step value for fov.
     this.speed = 3; // Multiplier for moving player per step.
     this.pos = pos;
@@ -156,11 +157,12 @@ class Raycaster {
       const rayPosition = rays[i].pos;
       const wall = rays[i].object;
       const rayDistance = vectorDistance(this.pos, rayPosition);
-      const angle = this.dir + (this.precision * i);
-      const normalizedDistance = Math.cos(radians(angle)) * rayDistance;
-      const columnOffset = Math.max((VIEW_DISTANCE - normalizedDistance), 0);
+      const halfFov = this.fov / 2;
+      const angle = -halfFov + (this.precision * i);
+      const normalizedDistance = Math.cos(radians(angle)) * rayDistance; // z
+      const columnOffset = this.pov.height * (COLUMN_HEIGHT / normalizedDistance);
       const x1 = offset;
-      const y1 = (WORLD_HEIGHT / 2) - (columnOffset / 2);
+      const y1 = (this.pov.height / 2) - (columnOffset / 2);
       const brightness = (((VIEW_DISTANCE - normalizedDistance) / VIEW_DISTANCE) * 40) + 10;
       this.pov.ctx.beginPath();
       const wallHue = wall.hue;
