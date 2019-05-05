@@ -3,16 +3,15 @@
 
 // # Constants
 
-// The length/width of one grid section, or wall.
 const GRID_LENGTH = 10;
-const WORLD_WIDTH = 1500;
-const WORLD_HEIGHT = 1500;
+const WORLD_WIDTH = 1000;
+const WORLD_HEIGHT = 1000;
 const STARTING_POSX = 200;
 const STARTING_POSY = 200;
 const STARTING_DIR = 0; // Angle in degrees.
-const COLUMN_HEIGHT = 50;
+const WALL_HEIGHT = 100;
 const VIEW_DISTANCE = 1000;
-const FRAMERATE = 1000 / 24;
+const FRAMERATE = 1000 / 30;
 
 // # Helper functions
 const radians = degrees => degrees * (Math.PI / 180);
@@ -39,23 +38,6 @@ const getRandomWallColor = () => {
   const WALL_COLORS = [200, 220, 240, 260];
   return WALL_COLORS[ Math.floor((Math.random() * WALL_COLORS.length))];
 }
-
-// Brainstorming Base classes.
-
-// The camera won't have a position.
-// For now, it will use the same as the player.
-// class Camera {
-//   constructor(){
-
-//   }
-// }
-
-// Handle map rendering
-// class World {
-//   constructor(width, height){
-
-//   }
-// }
 
 class Vector {
   constructor(x = 0, y = 0) {
@@ -85,7 +67,7 @@ class Wall {
   drawMap(color) {
     const scaledVectorA = scaleToScreen(this.vectorA, this.map);
     const scaledVectorB = scaleToScreen(this.vectorB, this.map);
-    this.map.ctx.strokeStyle = this.color;
+    this.map.ctx.strokeStyle = color;
     this.map.ctx.beginPath();
     this.map.ctx.moveTo(scaledVectorA.x, scaledVectorA.y);
     this.map.ctx.lineTo(scaledVectorB.x, scaledVectorB.y);
@@ -99,8 +81,10 @@ class Raycaster {
   constructor({pos = new Vector(), dir = 0, map = null, pov = null, color = "rgba(200,100,200,1)", world = []}){
     this.size = 2; // Size of the circle indicating caster position
     this.fov = 60;
-    this.precision = .3; // Step value for fov.
-    this.speed = 3; // Multiplier for moving player per step.
+    this.precision = .1; // Step value for fov.
+    this.walkSpeed = 6; // Multiplier for moving player per step.
+    this.rotateSpeed = 3;
+    this.xoff = .1; // For perlin noise automation
     this.pos = pos;
     this.dir = dir;
     this.color = color; // Color of the circle indicating caster position
@@ -108,20 +92,20 @@ class Raycaster {
     this.pov = pov;
     this.world = world; // Reference to array of all objects in world.
     this.rays = [];
-    this.xoff = .1;
   }
 
   move({ x, y } = {}){
     if(x != null) {
-      const newPosX = clamp(this.pos.x + (x * this.speed), 1, WORLD_WIDTH - 1); // The 1 offset is to prevent being in a boundary wall
+      const newPosX = clamp(this.pos.x + (x * this.walkSpeed), 1, WORLD_WIDTH - 1); // The 1 offset is to prevent being in a boundary wall
       this.pos.x = newPosX;
     }
     if(y != null) {
-      const newPosY = clamp(this.pos.y + (y * this.speed), 1, WORLD_HEIGHT - 1);
+      const newPosY = clamp(this.pos.y + (y * this.walkSpeed), 1, WORLD_HEIGHT - 1);
       this.pos.y = newPosY;
     }
   }
 
+  // Experimenting with perlin noise driven animation.
   wander(){
     this.xoff += .1;
     const noise = window.noise.perlin2(this.xoff, this.xoff);
@@ -140,7 +124,7 @@ class Raycaster {
   }
 
   rotate(rotation){
-    const newDir = this.dir + (rotation * this.speed);
+    const newDir = this.dir + (rotation * this.rotateSpeed);
     this.dir = newDir;
   }
 
@@ -194,8 +178,8 @@ class Raycaster {
       const rayDistance = vectorDistance(this.pos, rayPosition);
       const halfFov = this.fov / 2;
       const angle = -halfFov + (this.precision * i);
-      const normalizedDistance = Math.cos(radians(angle)) * rayDistance;
-      const columnOffset = this.pov.height * (COLUMN_HEIGHT / normalizedDistance);
+      const normalizedDistance = Math.cos(radians(angle)) * rayDistance; // Remove fish-eye effect
+      const columnOffset = this.pov.height * (WALL_HEIGHT / normalizedDistance);
       const x1 = offset;
       const y1 = (this.pov.height / 2) - (columnOffset / 2);
       const brightness = (((VIEW_DISTANCE - normalizedDistance) / VIEW_DISTANCE) * 40) + 10;
@@ -231,7 +215,6 @@ class Raycaster {
     }
     this.rays = rays;
     this.draw();
-    return this;
   }
 
   castRay(ray) {
@@ -308,31 +291,15 @@ class Screen {
   }
 }
 
-// We'll start with a lot of objects. See if we decide to avoid that in a refactor.
-const generateRandomWalls = ({ count = 10, map = null, pov = null }) => {
-  const walls = [];
-  for(let i = 0; i < count; i++){
-    const wall = new Wall(new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), map, pov);
-    walls.push(wall);
-  }
-  walls.push(new Wall(new Vector(0, 0), new Vector(WORLD_WIDTH, 0), map, pov, 300));
-  walls.push(new Wall(new Vector(0, 0), new Vector(0, WORLD_HEIGHT), map, pov, 300));
-  walls.push(new Wall(new Vector(WORLD_WIDTH, WORLD_HEIGHT), new Vector(WORLD_WIDTH, 0), map, pov, 300));
-  walls.push(new Wall(new Vector(0, WORLD_HEIGHT), new Vector(WORLD_WIDTH, WORLD_HEIGHT), map, pov, 300));
-  return walls;
-}
-
-// To handle the I/O and game loop. Probably can refrain from making this a class, but for brainstorming it's cool.
 class Game {
   constructor(){
     this.interval = FRAMERATE;
     this.animationFrame = null;
     this.map = new Screen('display-map');
-    this.map.resizeCanvas(300,300);
-    // TODO: I need to project things now as a ratio of the map and fov dimensions and their true size to get the pixel value
+    this.map.resizeCanvas(250,250);
     this.pov = new Screen('display-pov');
-    this.pov.resizeCanvas(1200,500);
-    this.walls = generateRandomWalls({ map: this.map, pov: this.pov });
+    this.pov.resizeCanvas(1200,550);
+    this.walls = this.generateRandomWalls({ map: this.map, pov: this.pov });
     this.player = new Raycaster({pos: new Vector(STARTING_POSX, STARTING_POSY), dir: STARTING_DIR, map: this.map, pov: this.pov, world: this.walls });
 
     document.addEventListener('keydown', ({ key }) => {
@@ -360,12 +327,9 @@ class Game {
     const draw = timestamp => {
       const now = Date.now(timestamp);
       delta = now - then;
-      if(delta > this.interval) {
-        // Get i/o
-        
+      if(delta > this.interval) {        
         // Animate
         this.animate();
-        // this.player.wander();
 
         then = now - (delta % this.interval)
       }
@@ -388,9 +352,26 @@ class Game {
     }
     this.player.draw();
     this.player.cast();
+    
+    // OPTIONAL: Perlin noise animated player
+    // this.player.wander();
   }
 
+  generateRandomWalls({ count = 5, map = null, pov = null }) {
+    const walls = [];
+    for(let i = 0; i < count; i++){
+      const wall = new Wall(new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), new Vector(random(WORLD_WIDTH), random(WORLD_HEIGHT)), map, pov);
+      walls.push(wall);
+    }
 
+    // World boundary
+    walls.push(new Wall(new Vector(0, 0), new Vector(WORLD_WIDTH, 0), map, pov, 300));
+    walls.push(new Wall(new Vector(0, 0), new Vector(0, WORLD_HEIGHT), map, pov, 300));
+    walls.push(new Wall(new Vector(WORLD_WIDTH, WORLD_HEIGHT), new Vector(WORLD_WIDTH, 0), map, pov, 300));
+    walls.push(new Wall(new Vector(0, WORLD_HEIGHT), new Vector(WORLD_WIDTH, WORLD_HEIGHT), map, pov, 300));
+    return walls;
+  }
 }
+
 const game = new Game();
 game.start();
