@@ -18,7 +18,7 @@ const degrees = radians => radians / (Math.PI/ 180);
 const vectorDistance = (vector1, vector2) => Math.sqrt((vector1.x - vector2.x) ** 2 + (vector1.y - vector2.y) ** 2);
 const random = (upper = 100, lower = 0) => Math.max(Math.floor(Math.random() * (upper + 1)), lower);
 const clamp = (number, min, max) => Math.max(min, Math.min(number, max));
-const getMovementDelta = ({angle, forward = true, speed = 1 }) => {
+const getMovementDelta = ({angle, forward = true, speed = .5 }) => {
   const rads = radians(angle);
   const xDelta = Math.cos(rads) * speed;
   const yDelta = Math.sin(rads) * speed;
@@ -300,23 +300,15 @@ class Game {
     this.pov.resizeCanvas(1200,550);
     this.walls = this.generateRandomWalls({ map: this.map, pov: this.pov });
     this.player = new Raycaster({pos: new Vector(STARTING_POSX, STARTING_POSY), dir: STARTING_DIR, map: this.map, pov: this.pov, world: this.walls });
+    this.keyState = {}; // Active store of keypresses
 
     document.addEventListener('keydown', ({ key }) => {
-      switch(key){
-        case 'a':
-          this.player.rotate(-1);
-          break;
-        case 'd':
-          this.player.rotate(1);
-          break;
-        case 'w':
-          this.player.move(getMovementDelta({ angle: this.player.dir }))
-          break;
-        case 's':
-          this.player.move(getMovementDelta({ angle: this.player.dir, forward: false }))
-          break;
-      }      
+      this.keyState[key] = true;
     })
+    document.addEventListener('keyup', ({ key }) => {
+      this.keyState[key] = false;
+    })
+
   }
 
   start() {
@@ -328,13 +320,28 @@ class Game {
       delta = now - then;
       if(delta > this.interval) {        
         // Animate
+        this.updatePlayerPositioning();
         this.animate();
-
         then = now - (delta % this.interval)
       }
       this.animationFrame = requestAnimationFrame(draw);
     }
     this.animationFrame = requestAnimationFrame(draw)
+  }
+
+  updatePlayerPositioning(){
+    if(this.keyState.a){
+      this.player.rotate(-1);
+    }
+    if(this.keyState.d){
+      this.player.rotate(1);
+    }
+    if(this.keyState.w){
+      this.player.move(getMovementDelta({ angle: this.player.dir }))
+    }
+    if(this.keyState.s){
+      this.player.move(getMovementDelta({ angle: this.player.dir, forward: false }))
+    }
   }
 
   stop() {
